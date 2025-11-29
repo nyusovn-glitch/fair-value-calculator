@@ -264,11 +264,15 @@ with main_col:
 
     try:
         hist_data = yf.Ticker(ticker_input).history(period="2y")
-        hist_dates = hist_data.index
-        hist_prices = hist_data['Close']
-    except:
+        if hist_data is not None and not hist_data.empty:
+            hist_dates = hist_data.index
+            hist_prices = hist_data["Close"]
+        else:
+            raise ValueError("No history returned")
+    except Exception:
         hist_dates = pd.date_range(end=datetime.today(), periods=100)
-        hist_prices = [100] * 100
+        hist_prices =  * 100
+
 
     last_date = hist_dates[-1]
     future_dates = [last_date + timedelta(days=365*i/12) for i in range(years_to_project * 12)]
