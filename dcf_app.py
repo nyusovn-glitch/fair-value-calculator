@@ -5,7 +5,9 @@ import plotly.graph_objects as go
 import yfinance as yf
 from datetime import datetime, timedelta
 
+
 st.set_page_config(page_title="Fair Value Calculator", layout="wide")
+
 
 st.markdown("""
 <style>
@@ -52,6 +54,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 def calculate_cagr(end_value, start_value, periods):
     if start_value == 0 or periods <= 0:
         return 0
@@ -59,16 +62,17 @@ def calculate_cagr(end_value, start_value, periods):
         return 0
     return (end_value / start_value) ** (1 / periods) - 1
 
+
 # Compact dialog with 2-column layout
 @st.dialog("Fair Value Calculation Breakdown", width="large")
-def show_breakdown(metric_label, current_val, growth_rate, years, final_metric, 
-                   current_shares, shares_growth, final_shares, 
-                   metric_per_share_final, terminal_multiple, future_price, 
+def show_breakdown(metric_label, current_val, growth_rate, years, final_metric,
+                   current_shares, shares_growth, final_shares,
+                   metric_per_share_final, terminal_multiple, future_price,
                    discount_rate, fair_value, multiple_name):
-    
+
     # Create 2 columns for compact layout
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown(f"""
         <div class='breakdown-step'>
@@ -91,7 +95,7 @@ def show_breakdown(metric_label, current_val, growth_rate, years, final_metric,
             <p>${final_metric:,.0f}M / {final_shares:,.0f}M = <strong>${metric_per_share_final:,.2f}</strong></p>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col2:
         st.markdown(f"""
         <div class='breakdown-step'>
@@ -109,33 +113,34 @@ def show_breakdown(metric_label, current_val, growth_rate, years, final_metric,
             <p><strong>= ${fair_value:,.2f}</strong></p>
         </div>
         """, unsafe_allow_html=True)
-    
+
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("Close", use_container_width=True, type="primary"):
         st.rerun()
+
 
 main_col, input_col = st.columns([3, 1])
 
 with input_col:
     st.header("DCF Inputs")
     ticker_input = st.text_input("Ticker Symbol", value="GOOG").upper()
-    
+
     if st.button("Fetch Data"):
         try:
             stock = yf.Ticker(ticker_input)
             info = stock.info
-            
+
             st.session_state['ticker'] = ticker_input
             st.session_state['price'] = info.get('currentPrice', 150.0)
             st.session_state['shares'] = info.get('sharesOutstanding', 5000000000) / 1000000
-            
+
             financials = stock.financials.T.sort_index()
             cashflow = stock.cashflow.T.sort_index()
             combined = financials.join(cashflow, lsuffix='_inc', rsuffix='_cf', how='inner')
-            
+
             st.session_state['financials'] = combined
             st.session_state['data_fetched'] = True
-            
+
         except Exception as e:
             st.error(f"Error fetching data: {e}")
 
@@ -154,7 +159,7 @@ with input_col:
             combined = st.session_state.get('financials')
 
             target_col = None
-            
+
             if metric_label == "Earnings":
                 for col_name in ["Net Income", "Net Income Applicable to Common Shares", "Net Income Common Stockholders"]:
                     if col_name in combined.columns:
@@ -166,13 +171,13 @@ with input_col:
                 elif "Operating Cash Flow" in combined.columns and "Capital Expenditure" in combined.columns:
                     combined["Free Cash Flow"] = combined["Operating Cash Flow"] + combined["Capital Expenditure"]
                     target_col = "Free Cash Flow"
-            
+
             if target_col and target_col in combined.columns:
                 data_series = combined[target_col].dropna()
                 if len(data_series) > 0:
                     current_val_calc = data_series.iloc[-1] / 1000000
                     default_val = current_val_calc
-                    
+
                     years_avail = len(data_series)
                     if years_avail >= 2:
                         growth_rates["1y"] = calculate_cagr(data_series.iloc[-1], data_series.iloc[-2], 1)
@@ -183,7 +188,7 @@ with input_col:
             st.error(f"Error processing data: {e}")
 
     st.subheader("Assumptions")
-    
+
     years_to_project = st.selectbox("Number of Years To Project", [5, 10], index=0)
 
     def format_growth_inline(val):
@@ -194,7 +199,8 @@ with input_col:
     historic_text = f"Historic: 1Y: {format_growth_inline(growth_rates['1y'])} | 3Y: {format_growth_inline(growth_rates['3y'])}"
     st.markdown(f"<div class='historic-growth'>{historic_text}</div>", unsafe_allow_html=True)
 
-    shares_growth = st.number_input("Shares Change Rate (%)", value=-3.0, step=0.1, help="Negative = Buybacks") / 100
+    shares_growth = st.number_input("Shares Change Rate (%)", value=-3.0, step=0.1,
+                                    help="Negative = Buybacks") / 100
 
     multiple_name = "Price to FCF" if metric_label == "FCF" else "P/E Ratio"
     terminal_multiple = st.number_input(f"{multiple_name} (Terminal)", value=20.0, step=1.0)
@@ -205,6 +211,7 @@ with input_col:
     st.caption("Advanced Overrides")
     current_val_override = st.number_input(f"Starting {metric_label} ($M)", value=float(default_val))
     current_shares_override = st.number_input("Shares Outstanding (M)", value=float(default_shares))
+
 
 def calculate_dcf_per_share():
     future_years = list(range(1, years_to_project + 1))
@@ -226,8 +233,9 @@ def calculate_dcf_per_share():
     pv_fcf_per_share = [f / d for f, d in zip(fcf_per_share, discount_factors)]
     pv_terminal_per_share = terminal_val_per_share / ((1 + discount_rate) ** years_to_project)
     fair_value_ps = sum(pv_fcf_per_share) + pv_terminal_per_share
-    
+
     return fair_value_ps, val_projections, share_counts
+
 
 fair_value, proj_vals, proj_shares = calculate_dcf_per_share()
 
@@ -243,14 +251,22 @@ with main_col:
     m1, m2, m3, m4 = st.columns(4)
     upside = (fair_value - default_price) / default_price
     with m1:
-        st.markdown(f"<div class='metric-box'>Stock Price<br><span class='big-font'>${default_price:,.2f}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='metric-box'>Stock Price<br><span class='big-font'>${default_price:,.2f}</span></div>",
+            unsafe_allow_html=True)
     with m2:
-        st.markdown(f"<div class='metric-box'>Fair Value<br><span class='big-font'>${fair_value:,.2f}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='metric-box'>Fair Value<br><span class='big-font'>${fair_value:,.2f}</span></div>",
+            unsafe_allow_html=True)
     with m3:
         color = "green-text" if fair_value > default_price else "red-text"
-        st.markdown(f"<div class='metric-box'>Upside / Downside<br><span class='big-font {color}'>{upside:.1%}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='metric-box'>Upside / Downside<br><span class='big-font {color}'>{upside:.1%}</span></div>",
+            unsafe_allow_html=True)
     with m4:
-        st.markdown(f"<div class='metric-box'>Terminal {multiple_name}<br><span class='big-font'>{terminal_multiple}x</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='metric-box'>Terminal {multiple_name}<br><span class='big-font'>{terminal_multiple}x</span></div>",
+            unsafe_allow_html=True)
 
     st.write("")
 
@@ -262,6 +278,7 @@ with main_col:
             discount_rate, fair_value, multiple_name
         )
 
+    # SAFE HISTORY FETCH
     try:
         hist_data = yf.Ticker(ticker_input).history(period="2y")
         if hist_data is not None and not hist_data.empty:
@@ -271,12 +288,11 @@ with main_col:
             raise ValueError("No history returned")
     except Exception:
         hist_dates = pd.date_range(end=datetime.today(), periods=100)
-        hist_prices =  * 100
-
+        hist_prices = [100] * 100
 
     last_date = hist_dates[-1]
-    future_dates = [last_date + timedelta(days=365*i/12) for i in range(years_to_project * 12)]
-    fair_value_curve = [fair_value * ((1 + discount_rate) ** (i/12)) for i in range(len(future_dates))]
+    future_dates = [last_date + timedelta(days=365 * i / 12) for i in range(years_to_project * 12)]
+    fair_value_curve = [fair_value * ((1 + discount_rate) ** (i / 12)) for i in range(len(future_dates))]
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=hist_dates, y=hist_prices, mode='lines', name='Stock Price',
